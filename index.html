@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0E13">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TraceAR">
+  <meta name="description" content="Free, ad-free camera tracing overlay and sketch pad for drawing on physical paper.">
+  <title>TraceAR</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+
+    <!-- ==================== CAMERA TRACE VIEW ==================== -->
+    <section id="traceView" class="workspace workspace--active" aria-label="Camera Tracing Workspace">
+      <div id="cameraStage" class="camera-stage">
+        <video id="cameraVideo" class="camera-video" playsinline autoplay muted></video>
+
+        <!-- Grid guide (optional alignment aid) -->
+        <div id="gridOverlay" class="grid-overlay" hidden aria-hidden="true"></div>
+
+        <!-- Transformed Reference Layer -->
+        <div id="referenceStage" class="reference-stage" hidden>
+          <canvas id="referenceCanvas" class="reference-canvas"></canvas>
+        </div>
+
+        <!-- Camera fallback / permission state -->
+        <div id="cameraFallback" class="stage-fallback" hidden>
+          <div class="fallback-panel">
+            <svg class="icon icon--lg" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 10l4.55-2.28A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.9L15 14M3 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/>
+              <path d="M3 3l18 18"/>
+            </svg>
+            <h2 id="cameraFallbackTitle" class="fallback-title">Camera Access Needed</h2>
+            <p id="cameraFallbackDesc" class="fallback-desc">Allow rear camera access in Safari so TraceAR can show your paper underneath your reference image. Video never leaves your phone.</p>
+            <div class="fallback-actions">
+              <button id="retryCameraBtn" type="button" class="btn btn--primary">Enable Camera</button>
+              <button id="fallbackToSketchBtn" type="button" class="btn btn--secondary">Open Sketch Pad</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Empty reference state -->
+        <div id="emptyReferenceCard" class="empty-card">
+          <h2 class="empty-card__title">Choose a Reference to Trace</h2>
+          <p class="empty-card__desc">Prop your iPhone on a glass or stand above your paper, then pick an image to project.</p>
+          <div class="empty-card__actions">
+            <label for="quickFileInput" class="btn btn--primary">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <circle cx="8.5" cy="9.5" r="1.5"/>
+                <path d="M21 15l-5-5L5 20"/>
+              </svg>
+              <span>Photos</span>
+            </label>
+            <input id="quickFileInput" type="file" accept="image/*" class="sr-only">
+            <button id="openSamplesEmptyBtn" type="button" class="btn btn--secondary">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2L3 7l9 5 9-5-9-5z"/>
+                <path d="M3 17l9 5 9-5"/>
+                <path d="M3 12l9 5 9-5"/>
+              </svg>
+              <span>Samples</span>
+            </button>
+            <button id="pasteEmptyBtn" type="button" class="btn btn--icon" aria-label="Paste image from clipboard" title="Paste from clipboard">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="8" y="2" width="8" height="4" rx="1"/>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top HUD -->
+      <header class="hud-top">
+        <div id="statusBadge" class="status-pill" role="status" aria-live="polite">
+          <span id="statusDot" class="status-dot status-dot--warn"></span>
+          <span id="statusText">Starting Camera</span>
+        </div>
+
+        <div class="hud-actions">
+          <button id="openPickerBtn" type="button" class="icon-btn" aria-label="Choose reference image">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2"/>
+              <circle cx="8.5" cy="9.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 20"/>
+            </svg>
+          </button>
+          <button id="toggleGridBtn" type="button" class="icon-btn" aria-pressed="false" aria-label="Toggle proportion grid">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+            </svg>
+          </button>
+          <button id="snapshotBtn" type="button" class="icon-btn" aria-label="Save or share camera trace snapshot">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+          <button id="openSettingsBtn" type="button" class="icon-btn" aria-label="Open settings">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.08a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Actionable Banner (Low Light / Errors) -->
+      <div id="alertBanner" class="alert-banner" role="alert" hidden>
+        <div class="alert-banner__body">
+          <strong id="alertTitle" class="alert-banner__title">Notice</strong>
+          <p id="alertMessage" class="alert-banner__msg"></p>
+        </div>
+        <div class="alert-banner__actions">
+          <button id="alertActionBtn" type="button" class="btn btn--sm btn--primary" hidden>Action</button>
+          <button id="alertDismissBtn" type="button" class="btn btn--sm btn--ghost">Dismiss</button>
+        </div>
+      </div>
+
+      <!-- Transient Toast -->
+      <div id="toastPill" class="toast-pill" role="status" aria-live="polite" hidden></div>
+
+      <!-- Bottom One-Handed Trace Control Deck -->
+      <div id="traceControlDeck" class="control-deck" hidden>
+        <div class="deck-row">
+          <button id="lockToggleBtn" type="button" class="btn btn--lock" aria-pressed="false">
+            <svg id="lockIconUnlocked" class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+            </svg>
+            <svg id="lockIconLocked" class="icon" viewBox="0 0 24 24" hidden aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <span id="lockBtnLabel">Lock Position</span>
+          </button>
+
+          <div id="nudgeControls" class="nudge-group" aria-label="Fine transform adjustments">
+            <button id="scaleDownBtn" type="button" class="nudge-btn" aria-label="Shrink reference image 10 percent">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+            </button>
+            <span id="scaleReadout" class="scale-readout" aria-live="off">100%</span>
+            <button id="scaleUpBtn" type="button" class="nudge-btn" aria-label="Enlarge reference image 10 percent">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <button id="rotateRightBtn" type="button" class="nudge-btn" aria-label="Rotate 15 degrees clockwise">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 2v6h-6"/>
+                <path d="M21 13a9 9 0 1 1-3-7.7L21 8"/>
+              </svg>
+            </button>
+            <button id="resetTransformBtn" type="button" class="nudge-btn" aria-label="Center and reset scale">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="deck-row deck-row--slider">
+          <label for="opacitySlider" class="slider-label">Opacity</label>
+          <input id="opacitySlider" type="range" min="5" max="100" value="55" class="range-slider" aria-label="Reference overlay opacity">
+          <output id="opacityValue" for="opacitySlider" class="slider-readout">55%</output>
+        </div>
+
+        <div class="deck-row deck-row--chips" role="group" aria-label="Image tracing filters">
+          <button id="filterOutlineBtn" type="button" class="chip-btn" aria-pressed="false">
+            <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 20c4-1 8-7 11-11a2.8 2.8 0 1 0-4-4C7 8 4 16 4 20z"/>
+            </svg>
+            <span>Outline</span>
+          </button>
+          <button id="filterGrayBtn" type="button" class="chip-btn" aria-pressed="false">
+            <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 3v18"/>
+            </svg>
+            <span>Grayscale</span>
+          </button>
+          <button id="filterInvertBtn" type="button" class="chip-btn" aria-pressed="false">
+            <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3a9 9 0 1 0 9 9c0-.5-.04-1-.12-1.5A5.5 5.5 0 0 1 12 3z"/>
+            </svg>
+            <span>Invert</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 2D SKETCH PAD VIEW ==================== -->
+    <section id="sketchView" class="workspace workspace--sketch" aria-label="2D Sketch Pad" hidden>
+      <header class="sketch-topbar">
+        <div class="sketch-topbar__group">
+          <button id="undoBtn" type="button" class="sketch-icon-btn" disabled aria-label="Undo stroke">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M9 14L4 9l5-5"/>
+              <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>
+            </svg>
+          </button>
+          <button id="redoBtn" type="button" class="sketch-icon-btn" disabled aria-label="Redo stroke">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M15 14l5-5-5-5"/>
+              <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>
+            </svg>
+          </button>
+          <button id="clearSketchBtn" type="button" class="sketch-icon-btn" disabled aria-label="Clear canvas">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18"/>
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="sketch-topbar__group">
+          <button id="underlayToggleBtn" type="button" class="sketch-icon-btn" hidden aria-pressed="false" aria-label="Toggle faint reference underlay">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+          <button id="saveSketchBtn" type="button" class="sketch-icon-btn" aria-label="Download sketch PNG">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <path d="M7 10l5 5 5-5"/>
+              <path d="M12 15V3"/>
+            </svg>
+          </button>
+          <button id="shareSketchBtn" type="button" class="sketch-icon-btn" aria-label="Share sketch or save to Photos">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+              <path d="M16 6l-4-4-4 4"/>
+              <path d="M12 2v13"/>
+            </svg>
+          </button>
+          <button id="openSettingsFromSketchBtn" type="button" class="sketch-icon-btn" aria-label="Open settings">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="sketchPaperWrap" class="sketch-paper-wrap">
+        <canvas id="sketchDisplayCanvas" class="sketch-canvas" aria-label="Drawing canvas"></canvas>
+        <p id="sketchEmptyHint" class="sketch-empty-hint" aria-hidden="true">Draw freely with finger or stylus</p>
+      </div>
+
+      <div class="sketch-palette">
+        <div class="sketch-palette__row">
+          <div class="tool-toggle" role="group" aria-label="Drawing tools">
+            <button id="toolPencilBtn" type="button" class="tool-btn tool-btn--active" aria-pressed="true">
+              <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+              </svg>
+              <span>Pencil</span>
+            </button>
+            <button id="toolEraserBtn" type="button" class="tool-btn" aria-pressed="false">
+              <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 20H7L3 16a1 1 0 0 1 0-1.4l9.6-9.6a2 2 0 0 1 2.8 0l5.6 5.6a2 2 0 0 1 0 2.8L15 19.4"/>
+              </svg>
+              <span>Eraser</span>
+            </button>
+          </div>
+
+          <div id="sizeSelector" class="size-group" role="group" aria-label="Brush sizes">
+            <button type="button" class="size-btn" data-size="3" aria-label="Small brush 3 pixels" aria-pressed="false">
+              <span class="size-dot" style="width:5px;height:5px;"></span>
+            </button>
+            <button type="button" class="size-btn size-btn--active" data-size="8" aria-label="Medium brush 8 pixels" aria-pressed="true">
+              <span class="size-dot" style="width:10px;height:10px;"></span>
+            </button>
+            <button type="button" class="size-btn" data-size="16" aria-label="Large brush 16 pixels" aria-pressed="false">
+              <span class="size-dot" style="width:16px;height:16px;"></span>
+            </button>
+          </div>
+        </div>
+
+        <div id="colorSwatches" class="swatch-row" role="group" aria-label="Ink colors">
+          <button type="button" class="swatch-btn swatch-btn--active" data-color="#14171C" data-name="Ink Black" aria-label="Ink Black" aria-pressed="true">
+            <span class="swatch-fill" style="background:#14171C;"></span>
+          </button>
+          <button type="button" class="swatch-btn" data-color="#D92B2B" data-name="Crimson Red" aria-label="Crimson Red" aria-pressed="false">
+            <span class="swatch-fill" style="background:#D92B2B;"></span>
+          </button>
+          <button type="button" class="swatch-btn" data-color="#1D5FD6" data-name="Royal Blue" aria-label="Royal Blue" aria-pressed="false">
+            <span class="swatch-fill" style="background:#1D5FD6;"></span>
+          </button>
+          <button type="button" class="swatch-btn" data-color="#1E8A44" data-name="Forest Green" aria-label="Forest Green" aria-pressed="false">
+            <span class="swatch-fill" style="background:#1E8A44;"></span>
+          </button>
+          <button type="button" class="swatch-btn" data-color="#E07A00" data-name="Warm Amber" aria-label="Warm Amber" aria-pressed="false">
+            <span class="swatch-fill" style="background:#E07A00;"></span>
+          </button>
+          <button type="button" class="swatch-btn" data-color="#7B2CBF" data-name="Deep Purple" aria-label="Deep Purple" aria-pressed="false">
+            <span class="swatch-fill" style="background:#7B2CBF;"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== BOTTOM MODE BAR ==================== -->
+    <nav class="mode-bar" aria-label="App Mode">
+      <button id="modeTraceBtn" type="button" class="mode-tab mode-tab--active" aria-current="page">
+        <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        <span>Camera Trace</span>
+      </button>
+      <button id="modeSketchBtn" type="button" class="mode-tab">
+        <svg class="icon icon--sm" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+        </svg>
+        <span>Sketch Pad</span>
+      </button>
+    </nav>
+
+    <!-- ==================== REFERENCE PICKER DIALOG ==================== -->
+    <dialog id="pickerDialog" class="sheet-dialog" aria-labelledby="pickerDialogTitle">
+      <div class="sheet-content">
+        <div class="sheet-header">
+          <h2 id="pickerDialogTitle" class="sheet-title">Choose Reference</h2>
+          <button id="closePickerBtn" type="button" class="sheet-close-btn" aria-label="Close reference picker">Done</button>
+        </div>
+
+        <div class="sheet-body">
+          <div class="import-list">
+            <label for="sheetFileInput" class="import-row">
+              <span class="import-row__icon">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2"/>
+                  <circle cx="8.5" cy="9.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 20"/>
+                </svg>
+              </span>
+              <span class="import-row__text">
+                <strong>Choose from Photos</strong>
+                <small>Pick any photo or drawing from your iPhone library</small>
+              </span>
+            </label>
+            <input id="sheetFileInput" type="file" accept="image/*" class="sr-only">
+
+            <button id="sheetPasteBtn" type="button" class="import-row">
+              <span class="import-row__icon">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="8" y="2" width="8" height="4" rx="1"/>
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                </svg>
+              </span>
+              <span class="import-row__text">
+                <strong>Paste from Clipboard</strong>
+                <small>Use an image copied from Photos or Safari</small>
+              </span>
+            </button>
+          </div>
+
+          <h3 class="section-heading">Built-In Geometric Guides</h3>
+          <div id="sampleGrid" class="sample-grid"></div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- ==================== SETTINGS DIALOG ==================== -->
+    <dialog id="settingsDialog" class="sheet-dialog" aria-labelledby="settingsDialogTitle">
+      <div class="sheet-content">
+        <div class="sheet-header">
+          <h2 id="settingsDialogTitle" class="sheet-title">Settings</h2>
+          <button id="closeSettingsBtn" type="button" class="sheet-close-btn">Done</button>
+        </div>
+
+        <div class="sheet-body">
+          <div class="setting-group">
+            <label class="setting-row" for="wakeLockToggle">
+              <span class="setting-row__text">
+                <strong>Keep Screen Awake</strong>
+                <small>Prevents display auto-lock while tracing</small>
+              </span>
+              <input id="wakeLockToggle" type="checkbox" checked class="toggle-input">
+            </label>
+
+            <label class="setting-row" for="mirrorCameraToggle">
+              <span class="setting-row__text">
+                <strong>Mirror Reference Horizontally</strong>
+                <small>Flip your reference image left-to-right</small>
+              </span>
+              <input id="mirrorCameraToggle" type="checkbox" class="toggle-input">
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <button id="replayOnboardingBtn" type="button" class="setting-action-btn">Replay 3-Step Setup Guide</button>
+            <button id="resetAllBtn" type="button" class="setting-action-btn setting-action-btn--danger">Reset Filters &amp; Position</button>
+          </div>
+
+          <div class="install-hint">
+            <strong>Install on iPhone Home Screen</strong>
+            <p>In Safari, tap <b>Share</b> then <b>Add to Home Screen</b> to launch TraceAR full-screen offline with no browser bars.</p>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- ==================== 3-STEP ONBOARDING OVERLAY ==================== -->
+    <div id="onboardingModal" class="onboarding" role="dialog" aria-modal="true" aria-labelledby="onboardingStepTitle" hidden>
+      <div class="onboarding__card">
+        <div class="onboarding__top">
+          <div id="onboardingDots" class="step-dots" aria-hidden="true">
+            <span class="step-dot step-dot--active"></span>
+            <span class="step-dot"></span>
+            <span class="step-dot"></span>
+          </div>
+          <button id="skipOnboardingBtn" type="button" class="skip-btn">Skip</button>
+        </div>
+
+        <div class="onboarding__icon-wrap" aria-hidden="true">
+          <svg id="onboardingSvg" class="icon icon--xl" viewBox="0 0 24 24">
+            <rect x="6" y="2" width="12" height="20" rx="2"/>
+            <path d="M12 18h.01"/>
+          </svg>
+        </div>
+
+        <h2 id="onboardingStepTitle" class="onboarding__title">Rest Phone on a Stand</h2>
+        <p id="onboardingStepBody" class="onboarding__body">Prop your iPhone 20–30 cm above your sketch paper using a clear glass, tall mug, stack of books, or phone stand.</p>
+        <p id="onboardingStepTip" class="onboarding__tip">Turn on a desk lamp so your paper and pencil tip stay sharp.</p>
+
+        <button id="nextOnboardingBtn" type="button" class="btn btn--primary btn--full">Next</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="./js/samples.js"></script>
+  <script src="./js/filters.js"></script>
+  <script src="./js/sketch.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
